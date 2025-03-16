@@ -19,7 +19,7 @@ if (process.env.MONGODB_CERT_CONTENT) {
 }
 
 module.exports = {
-  DB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/train-ticket-api',
+  DB_URI: process.env.MONGODB_URI || 'mongodb+srv://cluster0.kk7zu.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=Cluster0',
   DB_OPTIONS: {
     useNewUrlParser: true,
     useUnifiedTopology: true,

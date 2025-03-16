@@ -10,6 +10,7 @@ const stationsRouter = require('./routes/stations');
 const servicesRouter = require('./routes/services');
 const scansRouter = require('./routes/scans');
 const ticketsRouter = require('./routes/tickets');
+const stationDataRouter = require('./routes/stationData'); // Add the new route
 const errorHandler = require('./middleware/errorHandler');
 const { DB_URI } = require('./config/database');
 
@@ -33,6 +34,7 @@ app.use('/api/stations', stationsRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/scans', scansRouter);
 app.use('/api/tickets', ticketsRouter);
+app.use('/api/station-data', stationDataRouter); // Register the new route
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -48,7 +50,8 @@ app.get('/', (req, res) => {
       stations: '/api/stations',
       services: '/api/services',
       scans: '/api/scans',
-      tickets: '/api/tickets'
+      tickets: '/api/tickets',
+      stationData: '/api/station-data'
     },
     docs: '/docs',
     health: '/health'
