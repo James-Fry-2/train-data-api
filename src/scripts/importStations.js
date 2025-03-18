@@ -1,14 +1,18 @@
 // scripts/importStations.js
 const axios = require('axios');
 const mongoose = require('mongoose');
-const dotenv = require('dotenv');
 const path = require('path');
-
+const dotenv = require('dotenv');
+console.log('Current working directory:', process.cwd());
+console.log('__dirname:', __dirname);
+console.log('Looking for .env at:', path.resolve(process.cwd(), '.env'));
+console.log('Environment loaded:', process.env.MONGODB_URI ? 'Yes' : 'No');
 // Load environment variables
-dotenv.config({ path: path.join(__dirname, '../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+console.log('Environment loaded:', process.env.MONGODB_URI ? 'Yes' : 'No');
 
 // Import database configuration
-const { DB_URI, DB_OPTIONS } = require('../src/config/database');
+const { DB_URI, DB_OPTIONS } = require('../config/database');
 
 // URL to the stations JSON file
 const STATIONS_JSON_URL = 'https://raw.githubusercontent.com/davwheat/uk-railway-stations/main/stations.json';
@@ -80,48 +84,60 @@ function transformStationData(rawStations) {
 async function importStations(stations) {
   try {
     console.log(`Beginning import of ${stations.length} stations...`);
-    let inserted = 0;
-    let updated = 0;
-    let errors = 0;
     
-    for (const station of stations) {
-      try {
-        // Try to find existing station by CRS code
-        const existingStation = await Station.findOne({ crs: station.crs });
-        
-        if (existingStation) {
-          // Update existing station
-          const result = await Station.updateOne(
-            { crs: station.crs },
-            { 
-              $set: {
-                ...station,
-                updatedAt: new Date()
-              }
-            }
-          );
-          
-          if (result.modifiedCount > 0) {
-            updated++;
+    // Find existing stations in one query to avoid individual lookups
+    const existingCRSCodes = new Set((await Station.find({}, 'crs').lean())
+      .map(station => station.crs));
+    
+    // Prepare bulk operations
+    const bulkOps = [];
+    
+    stations.forEach(station => {
+      if (existingCRSCodes.has(station.crs)) {
+        // Update operation
+        bulkOps.push({
+          updateOne: {
+            filter: { crs: station.crs },
+            update: { $set: { ...station, updatedAt: new Date() } }
           }
-        } else {
-          // Insert new station
-          await Station.create(station);
-          inserted++;
-        }
+        });
+      } else {
+        // Insert operation
+        bulkOps.push({
+          insertOne: {
+            document: station
+          }
+        });
+      }
+    });
+    
+    // Execute bulk operations in batches
+    const BATCH_SIZE = 500;
+    let results = { inserted: 0, updated: 0, errors: 0 };
+    
+    for (let i = 0; i < bulkOps.length; i += BATCH_SIZE) {
+      const batch = bulkOps.slice(i, i + BATCH_SIZE);
+      try {
+        const result = await Station.bulkWrite(batch, { ordered: false });
+        results.inserted += result.insertedCount || 0;
+        results.updated += result.modifiedCount || 0;
       } catch (error) {
-        console.error(`Error importing station ${station.crs} (${station.name}):`, error.message);
-        errors++;
+        console.error(`Error in batch ${i}-${i + batch.length}:`, error.message);
+        results.errors++;
+      }
+      
+      // Log progress periodically
+      if (i % (BATCH_SIZE * 4) === 0) {
+        console.log(`Progress: ${i}/${bulkOps.length} operations processed`);
       }
     }
     
-    console.log(`Import complete: ${inserted} inserted, ${updated} updated, ${errors} errors`);
+    console.log(`Import complete: ${results.inserted} inserted, ${results.updated} updated, ${results.errors} errors`);
   } catch (error) {
     console.error('Error during import process:', error.message);
     throw error;
   }
 }
-
 /**
  * Main function to run the import process
  */

@@ -7,7 +7,7 @@ const path = require('path');
 const CERT_FILE_PATH = process.env.MONGODB_CERT_CONTENT 
 
 // MongoDB connection URI
-const DB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/train-ticket-api';
+const DB_URI = process.env.MONGODB_URI;
 
 // MongoDB connection options for mongoose
 const DB_OPTIONS = {
