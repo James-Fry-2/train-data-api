@@ -5,6 +5,7 @@ const multer = require('multer');
 const ticketParserService = require('../services/ticketParserService');
 const dbService = require('../services/dbService');
 const auth = require('../middleware/auth');
+// Removed Station model import as it's not needed
 
 // Configure multer for file uploads
 const upload = multer({
@@ -29,6 +30,10 @@ const upload = multer({
  */
 router.post('/scan', auth, upload.single('ticket'), async (req, res, next) => {
   try {
+    console.log('Request received, file:', req.file ? 'present' : 'missing');
+    console.log('File size:', req.file ? req.file.size : 'N/A');
+    console.log('Request body:', req.body);
+
     if (!req.file) {
       return res.status(400).json({ error: 'No ticket image provided' });
     }
@@ -42,9 +47,12 @@ router.post('/scan', auth, upload.single('ticket'), async (req, res, next) => {
     // Validate the parsed data
     const validatedTicketData = ticketParserService.validateTicketData(ticketData);
     
-    // Create scan record
+    // No need to process location data if it's not available to us
+    
+    // Create scan record with data extracted by the parsing script
     const scanData = {
       userId,
+      // Ticket data comes from the parsing script, not the request
       ticketType: validatedTicketData.ticket_type,
       ticketReference: validatedTicketData.ticket_reference,
       validFrom: validatedTicketData.valid_from || validatedTicketData.valid_date,
@@ -53,14 +61,7 @@ router.post('/scan', auth, upload.single('ticket'), async (req, res, next) => {
       originCrs: validatedTicketData.origin_crs,
       destinationStation: validatedTicketData.destination_station,
       destinationCrs: validatedTicketData.destination_crs,
-      scanLocation: {
-        type: req.body.locationType || 'station',
-        crs: req.body.locationCrs,
-        coordinates: {
-          latitude: req.body.latitude,
-          longitude: req.body.longitude
-        }
-      },
+      // Only include device ID from the request
       deviceId: req.body.deviceId,
       isValid: validatedTicketData.is_valid,
       rawData: validatedTicketData.raw_data || validatedTicketData.raw_text
@@ -164,6 +165,8 @@ router.post('/mark-invalid/:reference', auth, async (req, res, next) => {
       return res.status(404).json({ error: 'Ticket not found in database' });
     }
     
+    // No need to process location data if it's not available to us
+    
     // Create a new scan record marking the ticket as invalid
     const scanData = {
       userId: userId || req.user.id,
@@ -177,10 +180,7 @@ router.post('/mark-invalid/:reference', auth, async (req, res, next) => {
       destinationCrs: ticketScans[0].destinationCrs,
       isValid: false,
       validationMessage: reason || 'Ticket marked as invalid by inspector',
-      scanLocation: req.body.scanLocation || {
-        type: 'station',
-        crs: req.body.locationCrs
-      },
+      // Removed scanLocation data as it's not available
       deviceId: req.body.deviceId
     };
     

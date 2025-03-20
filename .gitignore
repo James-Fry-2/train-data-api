@@ -2,5 +2,7 @@
 */node_modules
 certs/*
 node_modules/*
-*\dev-utils\*token*.json
-dev-utils/dev-tokens.json
+/dev-utils/*token*.json
+dev-utils/*.json
+debug_roi_images/*.jpg
+debug_roi_images/*.txt
