@@ -8,11 +8,11 @@ import cv2
 import numpy as np
 from dataclasses import dataclass
 from trainline_ticket_digital_config import get_trainline_configuration
-
+from config import tesseract_path
 from typing import Dict, List, Optional, Tuple, Any
 
 # Path to tesseract executable
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 # Debug mode flag - will be set from command line
 DEBUG_ROI = False
@@ -60,10 +60,9 @@ class TicketScanner:
             
         # Get the image filename for debug naming
         self.image_basename = os.path.splitext(os.path.basename(image_path))[0]
-            
+
         # Determine ticket type (paper vs digital)
         self.ticket_type = self._determine_ticket_type(original_image)
-        
         # Preprocess based on ticket type
         self.preprocessed_image = self._preprocess_image(original_image)
         
@@ -86,7 +85,7 @@ class TicketScanner:
         self.extracted_data = self._extract_ticket_details(working_image, config_name)
         
         # Post-process and validate the extracted data
-        self._validate_and_correct_data()
+        #self._validate_and_correct_data()
         
         # Generate reference if missing
         if "ticket_reference" not in self.extracted_data:
@@ -141,7 +140,7 @@ class TicketScanner:
             cv2.imwrite(debug_path, mask)
             
         orange_pixels = np.count_nonzero(mask)
-        features["orange_bar"] = (orange_pixels / mask.size) > 0.2
+        features["orange_bar"] = 1 if (orange_pixels / mask.size) > 0.2 else 0
         
         # 2. Check for paper texture (high frequency components)
         gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
@@ -153,7 +152,7 @@ class TicketScanner:
             debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_texture.jpg")
             cv2.imwrite(debug_path, texture_image)
             
-        features["texture"] = texture_measure > 10
+        features["texture"] = 1 if texture_measure > 10 else 0
         
         # 3. Check for perspective distortion
         edges = cv2.Canny(gray, 50, 150)
@@ -166,7 +165,10 @@ class TicketScanner:
         if lines is not None:
             angles = [np.arctan2(line[0][3] - line[0][1], line[0][2] - line[0][0]) for line in lines]
             angle_variation = np.std(angles) if angles else 0
-            features["perspective"] = angle_variation > 0.05
+            features["perspective"] = 1 if angle_variation > 0.05 else 0
+        else:
+            features["perspective"] = 0
+
             
             if self.debug_roi:
                 # Draw lines on a copy of the image
@@ -182,12 +184,9 @@ class TicketScanner:
             lab_image = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2LAB)
             illumination = cv2.split(lab_image)[0]
             illumination_var = np.std(illumination)
-            
-            if self.debug_roi:
-                debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_illumination.jpg")
-                cv2.imwrite(debug_path, illumination)
-                
-            features["shadow"] = illumination_var > 15
+            features["shadow"] = 1 if illumination_var > 15 else 0
+        else:
+            features["shadow"] = 0
         
         # 5. Check for digital elements (perfect alignment, QR codes)
         qr_detected = False
@@ -236,17 +235,17 @@ class TicketScanner:
             features["shadow"] * 0.7 - 
             features["digital_elements"] * 2.0
         )
-        
         # Save feature scores for debugging
         if self.debug_roi:
             debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_features.json")
             with open(debug_path, 'w') as f:
                 json.dump({
                     "features": features,
-                    "paper_score": paper_score,
+                    "paper_score": float(paper_score),  # Convert to float explicitly
                     "result": "paper" if paper_score > 0.5 else "digital"
                 }, f, indent=2)
         
+
         return "paper" if paper_score > 0.5 else "digital"
     
     def _preprocess_image(self, image):
@@ -443,8 +442,8 @@ class TicketScanner:
                 return config_name
         
         # Default to generic if no match found
-        return "generic_digital" if self.ticket_type == "digital" else "generic"
-    
+        return "generic_digital"
+     
     def _extract_ticket_details(self, image, config_name):
         """
         Extract train ticket details from an image using OCR based on a specific configuration.
@@ -461,6 +460,38 @@ class TicketScanner:
         
         # Get image dimensions for relative region calculations
         height, width = image.shape[:2]
+        
+        # Create a visualization image with all ROIs drawn on it
+        if self.debug_roi:
+            debug_image = image.copy()
+            # Add a 10x10 grid to the image
+            grid_image = image.copy()
+            
+            # Draw the grid lines
+            grid_color = (0, 0, 255)  # Red color for the grid
+            line_thickness = 1
+            
+            # Draw horizontal lines
+            for i in range(1, 10):
+                y = int(height * i / 10)
+                cv2.line(grid_image, (0, y), (width, y), grid_color, line_thickness)
+                # Add y-coordinate label (as a ratio)
+                ratio = i / 10.0
+                cv2.putText(grid_image, f"{ratio:.1f}", (5, y-5), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            
+            # Draw vertical lines
+            for i in range(1, 10):
+                x = int(width * i / 10)
+                cv2.line(grid_image, (x, 0), (x, height), grid_color, line_thickness)
+                # Add x-coordinate label (as a ratio)
+                ratio = i / 10.0
+                cv2.putText(grid_image, f"{ratio:.1f}", (x+5, 15), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            
+            # Save the grid image
+            debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_grid.jpg")
+            cv2.imwrite(debug_path, grid_image)
         
         # Process each field in the configuration
         for i, field in enumerate(config):
@@ -480,21 +511,20 @@ class TicketScanner:
                 if roi.size == 0:
                     continue
                 
-                           # Save ROI for debugging
+                # Draw ROI on debug image if debugging is enabled
                 if self.debug_roi:
-                    # Draw rectangle on a copy of the original image
-                    roi_vis = image.copy()
-                    cv2.rectangle(roi_vis, (roi_x1, roi_y1), (roi_x2, roi_y2), (0, 255, 0), 2)
-                    cv2.putText(roi_vis, field.name, (roi_x1, roi_y1-10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    
-                    debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_roi_{i}_{field.name}_outline.jpg")
-                    cv2.imwrite(debug_path, roi_vis)
-                    
+                    # Draw rectangle and text on the debug image
+                    cv2.rectangle(debug_image, (roi_x1, roi_y1), (roi_x2, roi_y2), (0, 255, 0), 2)
+                    # Add region coordinates as text (in ratio format)
+                    coord_text = f"({x1:.1f},{y1:.1f})-({x2:.1f},{y2:.1f})"
+                    cv2.putText(debug_image, f"{field.name}: {coord_text}", (roi_x1, roi_y1-10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                
                     # Save the actual ROI
                     debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_roi_{i}_{field.name}.jpg")
                     cv2.imwrite(debug_path, roi)
 
+                    # OCR the region
                 text = pytesseract.image_to_string(roi)
                 
                 # Save OCR result for debugging
@@ -506,6 +536,15 @@ class TicketScanner:
                 # Use full image if no region specified
                 text = pytesseract.image_to_string(image)
             
+            # Rest of the function remains the same...
+            # [Processing logic]
+        
+        # Save the visualization image with all ROIs
+            if self.debug_roi:
+                debug_path = os.path.join(self.debug_dir, f"{self.image_basename}_all_roi.jpg")
+                cv2.imwrite(debug_path, debug_image)
+            
+
             # Try to match each pattern
             for pattern in field.patterns:
                 match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
@@ -533,9 +572,9 @@ class TicketScanner:
                             details[field.name] = possible_value
                             self.confidence_scores[field.name] = 0.6  # Lower confidence
                             break
-        
         return details
-    
+
+        
     def _validate_and_correct_data(self):
         """
         Apply validation rules and corrections to extracted data.
@@ -543,10 +582,10 @@ class TicketScanner:
         # Example validation for station names
         if 'origin_station' in self.extracted_data:
             origin = self.extracted_data['origin_station']
-            # Clean up common OCR errors in station names
+            #TODO:  Clean up common OCR errors in station names 
             origin = re.sub(r'l\b', '1', origin)  # Replace lone 'l' with '1'
             origin = re.sub(r'0', 'O', origin)    # Replace '0' with 'O' in station names
-            
+            #TODO: Add station list in a separate file and use it for validation
             # Example simple station name validation (replace with comprehensive version)
             known_stations = ["London Paddington", "Bristol Temple Meads", "Reading", "Oxford", 
                              "Grantham", "Liverpool Lime Street", "Manchester Piccadilly"] 
@@ -674,6 +713,7 @@ if __name__ == "__main__":
         ticket = TicketScanner(debug_roi=args.debug_roi, debug_dir=args.debug_dir)
         results = ticket.scan(args.image_path)
         # Convert results to JSON and print to stdout
+
         print(json.dumps(results))
     except Exception as e:
         print(json.dumps({"error": str(e)}))

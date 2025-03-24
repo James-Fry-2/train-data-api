@@ -46,7 +46,7 @@ def get_trainline_configuration():
             patterns=[
                 r"([A-Z]{3})"
             ],
-            region=(0, 0.5, 0.46, 0.61) 
+            region=(0, 0.53, 0.46, 0.6) 
         ),
         
         # Destination station
@@ -75,7 +75,7 @@ def get_trainline_configuration():
                 r"(\d{2}\s+[A-Za-z]{3}\s+\d{4})",
                 r"08\s+Feb\s+2025"
             ],
-            region=(0.22, 0.58, 0.4, 0.6)  # "08 Feb 2025" date
+            region=(0.29, 0.4, 0.6, 0.5)  # "08 Feb 2025" date
         ),
         
         # Journey direction (outbound/return)
@@ -85,7 +85,7 @@ def get_trainline_configuration():
                 r"(Ret):\s+[A-Z]{3}\s*-\s*[A-Z]{3}",
                 r"Out:\s+[A-Z]{3}\s*-\s*[A-Z]{3}"
             ],
-            region=(0.5, 0.35, 1, 0.5)  # "Ret: LVP - GRA" text
+            region=(0.7, 0.4, 1, 0.49)  # "Ret: LVP - GRA" text
         ),
         
         # Ticket type
@@ -94,17 +94,17 @@ def get_trainline_configuration():
             patterns=[
                 r"(Off-Peak|Anytime|Advance|Super Off-Peak)(?:\s+Return|Single)?"
             ],
-            region=(0, 0.5, 0.6, 0.8)  # "Off-Peak Return" text
+            region=(0, 0.56, 0.3, 0.7)  # "Off-Peak Return" text
         ),
         
         # Route restrictions
         TicketField(
             name="route",
-            patterns=[
+            patterns=[                     
                 r"(Any Permitted)",
                 r"(Not via .+|Via .+|Any Permitted)"
             ],
-            region=(0.55, 0.5, 1, 0.8)  # "Any Permitted" text
+            region=(0.7, 0.65, 1, 0.7)  # "Any Permitted" text
         ),
         
         # Passenger type
@@ -114,7 +114,7 @@ def get_trainline_configuration():
                 r"(ADULT)",
                 r"(CHILD)"
             ],
-            region=(0.06, 0.8, 0.2, 0.83)  # "ADULT" text
+            region=(0, 0.7, 0.2, 0.74)  # "ADULT" text
         ),
         
         # Railcard
@@ -125,7 +125,7 @@ def get_trainline_configuration():
                 r"(\d{2}-\d{2}\s+Railcard)",
                 r"([A-Za-z\s\-]+Railcard)"
             ],
-            region=(0.06, 0.83, 0.4, 0.85)  # "26-30 Railcard" text
+            region=(0, 0.74, 0.3, 0.8)  # "26-30 Railcard" text
         ),
         
         # Valid until date
@@ -135,7 +135,7 @@ def get_trainline_configuration():
                 r"(\d{2}\s+[A-Za-z]{3}\s+\d{4})",
                 r"07\s+Mar\s+2025"
             ],
-            region=(0.55, 0.83, 0.94, 0.85)  # "07 Mar 2025" text
+            region=(0.7, 0.74, 1, 0.8)  # "07 Mar 2025" text
         ),
         
         # Ticket reference
@@ -145,7 +145,7 @@ def get_trainline_configuration():
                 r"(TTF[A-Z0-9]+)",
                 r"([A-Z0-9]{9,12})"
             ],
-            region=(0.2, 0.51, 0.8, 0.53)  # "TTF7JRT2QVF" reference code
+            region=(0.3, 0.3, 0.7, 0.4)  # "TTF7JRT2QVF" reference code
         ),
         
         # Digital ticket indicators (buttons, etc.)

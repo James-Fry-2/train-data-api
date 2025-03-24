@@ -10,7 +10,7 @@ const execPromise = util.promisify(exec);
 const PYTHON_SCRIPT_PATH = process.env.TICKET_PARSER_PATH || path.join(__dirname, '../../scripts/ticket_parsers/identify_ticket_details.py');
 const PARSER_API_URL = process.env.TICKET_PARSER_API || 'http://localhost:5000/parse-ticket';
 const USE_API = process.env.USE_TICKET_PARSER_API === 'true';
-const ENABLE_ROI_DEBUG = process.env.ENABLE_ROI_DEBUG === 'true';
+const ENABLE_ROI_DEBUG = process.env.ENABLE_ROI_DEBUG === 'false';
 const ROI_DEBUG_DIR = process.env.ROI_DEBUG_DIR || path.join(__dirname, '../../debug_roi_images');
 
 class TicketParserService {
@@ -69,8 +69,6 @@ class TicketParserService {
         console.warn('Python script stderr:', stderr);
       }
       
-      console.log('Python script stdout:', stdout.substring(0, 200) + (stdout.length > 200 ? '...' : ''));
-      
       try {
         // Parse the JSON output
         const ticketData = JSON.parse(stdout);
@@ -90,7 +88,7 @@ class TicketParserService {
       } catch (jsonError) {
         console.error('JSON parse error:', jsonError.message);
         console.error('Raw output first 500 chars:', stdout.substring(0, 500));
-        throw new Error(`Failed to parse ticket: ${jsonError.message}`);
+        throw new Error(`Failed to parse JSON output: ${jsonError.message}`);
       }
     } finally {
       // Clean up temporary file if created
@@ -160,7 +158,7 @@ class TicketParserService {
     }
     
     // Generate a reference if missing
-    if (!validatedData.ticket_reference) {
+    if (!validatedData.ticket_reference && !validatedData.reference) {
       console.log('Ticket reference not found, generating placeholder');
       // Create a reference from origin, destination and timestamp
       const timestamp = Date.now().toString().slice(-6);
@@ -176,6 +174,9 @@ class TicketParserService {
                   'UNK';
       validatedData.ticket_reference = `${origin}-${dest}-${timestamp}`;
       validatedData.is_reference_generated = true;
+    } else if (validatedData.reference && !validatedData.ticket_reference) {
+      // Use reference if available but ticket_reference is not
+      validatedData.ticket_reference = validatedData.reference;
     }
     
     // Normalize field names
@@ -204,13 +205,15 @@ class TicketParserService {
       // Origin fields
       'origin': 'origin_station',
       'originStation': 'origin_station',
-      'originCrs': 'origin_code',
+      'origin_code': 'origin_crs',
+      'originCrs': 'origin_crs',
       'from': 'origin_station',
       
       // Destination fields
       'destination': 'destination_station',
       'destinationStation': 'destination_station',
-      'destinationCrs': 'destination_code',
+      'destination_code': 'destination_crs',
+      'destinationCrs': 'destination_crs',
       'to': 'destination_station',
       
       // Date/time fields
@@ -221,6 +224,7 @@ class TicketParserService {
       'validDate': 'valid_date',
       'valid_date': 'valid_date',
       'date': 'valid_date',
+      'travel_date': 'valid_date',
       
       // Ticket fields
       'ticketType': 'ticket_type',
