@@ -6,3 +6,4 @@ node_modules/*
 dev-utils/*.json
 debug_roi_images/*.jpg
 debug_roi_images/*.txt
+*__pycache__*

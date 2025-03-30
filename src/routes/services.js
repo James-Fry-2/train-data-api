@@ -187,4 +187,65 @@ router.get('/fastest-departures/:crs/details', auth, validateRequest, async (req
   }
 });
 
+/**
+ * @route POST /api/services/confirm
+ * @desc Allow user to confirm a detected service
+ * @access Private
+ */
+router.post('/confirm', auth, validateRequest, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { serviceUsageId, isCorrect, actualServiceId } = req.body;
+    
+    if (!serviceUsageId) {
+      return res.status(400).json({ error: 'Service usage ID is required' });
+    }
+    
+    // Update the service usage record
+    const updatedService = await dbService.updateServiceUsageConfirmation(
+      serviceUsageId,
+      {
+        isConfirmedByUser: true,
+        isCorrect: isCorrect !== false, // Default to true if not specified
+        actualServiceId: isCorrect === false ? actualServiceId : undefined
+      }
+    );
+    
+    res.json({
+      message: 'Service confirmation updated',
+      service: updatedService
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+
+/**
+ * @route GET /api/services/history
+ * @desc Get user's service usage history
+ * @access Private
+ */
+router.get('/history', auth, validateRequest, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 10, skip = 0, startDate, endDate } = req.query;
+    
+    const serviceHistory = await dbService.getUserServiceHistory(userId, {
+      limit: parseInt(limit),
+      skip: parseInt(skip),
+      startDate,
+      endDate
+    });
+    
+    res.json({
+      services: serviceHistory,
+      count: serviceHistory.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

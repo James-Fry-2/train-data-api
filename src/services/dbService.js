@@ -1,192 +1,129 @@
-// services/dbService.js
-const StationBoard = require('../models/stationBoard');
-const ServiceDetails = require('../models/serviceDetails');
-const UserScan = require('../models/userScan');
+const StationVisit = require('../models/stationVisit');
+const ServiceUsage = require('../models/serviceUsage');
+const UserLocation = require('../models/userLocation');
+const Station = require('../models/station');
 
 class DatabaseService {
   /**
-   * Save station board data to database
-   * @param {Object} boardData - Station board data from LDBWS
-   * @returns {Promise<Object>} Saved station board document
+   * Save station visit data to database
+   * @param {Object} visitData - Station visit data
+   * @returns {Promise<Object>} Saved station visit document
    */
-  async saveStationBoard(boardData) {
+  async saveStationVisit(visitData) {
     try {
-      const { crs, generatedAt } = boardData;
-      
-      // Check if we already have a recent board for this station
-      const existingBoard = await StationBoard.findOne({
-        crs,
-        generatedAt: {
-          $gte: new Date(Date.now() - 5 * 60 * 1000) // Within last 5 minutes
-        }
-      });
-      
-      if (existingBoard) {
-        return existingBoard;
-      }
-      
-      // Create new board document
-      const stationBoard = new StationBoard({
-        ...boardData,
-        timestamp: new Date(),
-      });
-      
-      return await stationBoard.save();
+      const stationVisit = new StationVisit(visitData);
+      return await stationVisit.save();
     } catch (error) {
-      console.error('Error saving station board:', error);
+      console.error('Error saving station visit:', error);
       throw error;
     }
   }
 
   /**
-   * Get latest station board from database
-   * @param {string} crs - Station CRS code
-   * @returns {Promise<Object>} Station board document
-   */
-  async getLatestStationBoard(crs) {
-    try {
-      return await StationBoard.findOne({ crs: crs.toUpperCase() })
-        .sort({ generatedAt: -1 })
-        .lean();
-    } catch (error) {
-      console.error('Error retrieving station board:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Save service details to database
-   * @param {Object} serviceData - Service details from LDBWS
-   * @returns {Promise<Object>} Saved service details document
-   */
-  async saveServiceDetails(serviceData) {
-    try {
-      const { serviceID, generatedAt } = serviceData;
-      
-      // Check if we already have a recent record for this service
-      const existingService = await ServiceDetails.findOne({
-        serviceID,
-        generatedAt: {
-          $gte: new Date(Date.now() - 5 * 60 * 1000) // Within last 5 minutes
-        }
-      });
-      
-      if (existingService) {
-        return existingService;
-      }
-      
-      // Create new service details document
-      const serviceDetails = new ServiceDetails({
-        ...serviceData,
-        timestamp: new Date(),
-      });
-      
-      return await serviceDetails.save();
-    } catch (error) {
-      console.error('Error saving service details:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get service details from database
-   * @param {string} serviceId - Service ID
-   * @returns {Promise<Object>} Service details document
-   */
-  async getServiceDetails(serviceId) {
-    try {
-      return await ServiceDetails.findOne({ serviceID: serviceId })
-        .sort({ generatedAt: -1 })
-        .lean();
-    } catch (error) {
-      console.error('Error retrieving service details:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Record a ticket scan from a user
-   * @param {Object} scanData - Scan data including user ID, ticket details, etc.
-   * @returns {Promise<Object>} Saved scan record
-   */
-  async recordTicketScan(scanData) {
-    try {
-      const userScan = new UserScan({
-        ...scanData,
-        scanTimestamp: new Date(),
-      });
-      
-      return await userScan.save();
-    } catch (error) {
-      console.error('Error recording ticket scan:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user's scan history
+   * Get user's station visits
    * @param {string} userId - User ID
-   * @param {Object} options - Query options (limit, sort, etc.)
-   * @returns {Promise<Array>} Array of scan records
+   * @param {number} limit - Maximum number of records to return
+   * @returns {Promise<Array>} Array of station visit records
    */
-  async getUserScans(userId, options = {}) {
-    const { limit = 50, skip = 0 } = options;
+  async getUserStationVisits(userId, limit = 5) {
+    try {
+      return await StationVisit.find({ userId })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean();
+    } catch (error) {
+      console.error('Error retrieving station visits:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Record service usage by a user
+   * @param {Object} serviceData - Service usage data
+   * @returns {Promise<Object>} Saved service usage document
+   */
+  async recordServiceUsage(serviceData) {
+    try {
+      // Add journey date if not provided
+      if (!serviceData.journeyDate && serviceData.departureTime) {
+        const date = new Date(serviceData.departureTime);
+        serviceData.journeyDate = date.toISOString().slice(0, 10); // YYYY-MM-DD
+      }
+      
+      const serviceUsage = new ServiceUsage(serviceData);
+      return await serviceUsage.save();
+    } catch (error) {
+      console.error('Error recording service usage:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save user location data
+   * @param {Object} locationData - User location data
+   * @returns {Promise<Object>} Saved location document
+   */
+  async saveUserLocation(locationData) {
+    try {
+      const userLocation = new UserLocation(locationData);
+      return await userLocation.save();
+    } catch (error) {
+      console.error('Error saving user location:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's location history between two timestamps
+   * @param {string} userId - User ID
+   * @param {Date} startTime - Start time
+   * @param {Date} endTime - End time
+   * @returns {Promise<Array>} Array of location records
+   */
+  async getUserLocationHistory(userId, startTime, endTime) {
+    try {
+      return await UserLocation.find({
+        userId,
+        timestamp: { $gte: startTime, $lte: endTime }
+      })
+        .sort({ timestamp: 1 })
+        .lean();
+    } catch (error) {
+      console.error('Error retrieving location history:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's service usage history
+   * @param {string} userId - User ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of service usage records
+   */
+  async getUserServiceHistory(userId, options = {}) {
+    const { limit = 10, skip = 0, startDate, endDate } = options;
+    
+    const query = { userId };
+    
+    if (startDate || endDate) {
+      query.departureTime = {};
+      if (startDate) query.departureTime.$gte = new Date(startDate);
+      if (endDate) query.departureTime.$lte = new Date(endDate);
+    }
     
     try {
-      return await UserScan.find({ userId })
-        .sort({ scanTimestamp: -1 })
+      return await ServiceUsage.find(query)
+        .sort({ departureTime: -1 })
         .skip(skip)
         .limit(limit)
         .lean();
     } catch (error) {
-      console.error('Error retrieving user scans:', error);
+      console.error('Error retrieving service history:', error);
       throw error;
     }
   }
   
-  /**
-   * Get ticket scans by reference number
-   * @param {string} ticketReference - Ticket reference number
-   * @returns {Promise<Array>} Array of ticket scan records
-   */
-  async getTicketScansByReference(ticketReference) {
-    try {
-      return await UserScan.find({ ticketReference })
-        .sort({ scanTimestamp: -1 })
-        .lean();
-    } catch (error) {
-      console.error('Error retrieving ticket scans:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * Delete old board data to maintain database size
-   * @param {number} daysToKeep - Number of days of data to retain
-   * @returns {Promise<Object>} Deletion results
-   */
-  async cleanupOldBoardData(daysToKeep = 7) {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-    
-    try {
-      const stationBoardResult = await StationBoard.deleteMany({
-        timestamp: { $lt: cutoffDate }
-      });
-      
-      const serviceDetailsResult = await ServiceDetails.deleteMany({
-        timestamp: { $lt: cutoffDate }
-      });
-      
-      return {
-        stationBoards: stationBoardResult.deletedCount,
-        serviceDetails: serviceDetailsResult.deletedCount
-      };
-    } catch (error) {
-      console.error('Error cleaning up old data:', error);
-      throw error;
-    }
-  }
+  // Additional database methods...
 }
 
 module.exports = new DatabaseService();
